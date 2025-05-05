@@ -1,86 +1,65 @@
-//
-//  ContentView.swift
-//  Maps-intro
-//
-//  Created by Natalie S on 2025-05-05.
-//
-
 import SwiftUI
-import CoreData
+import MapKit
 
 struct ContentView: View {
-    @Environment(\.managedObjectContext) private var viewContext
+    @StateObject var locationManager = LocationManager()
 
-    @FetchRequest(
-        sortDescriptors: [NSSortDescriptor(keyPath: \Item.timestamp, ascending: true)],
-        animation: .default)
-    private var items: FetchedResults<Item>
+    @State private var region = MKCoordinateRegion(
+        center: CLLocationCoordinate2D(latitude: 37.3323341, longitude: -122.0312186),
+        span: MKCoordinateSpan(latitudeDelta: 0.02, longitudeDelta: 0.02)
+    )
+
+    @State private var places = [
+        Place(name: "nice place", latitude: 37.332, longitude: -122.032),
+        Place(name: "good place", latitude: 37.332, longitude: -122.03),
+        Place(name: "different place", latitude: 37.332, longitude: -122.029)
+    ]
 
     var body: some View {
-        NavigationView {
-            List {
-                ForEach(items) { item in
-                    NavigationLink {
-                        Text("Item at \(item.timestamp!, formatter: itemFormatter)")
-                    } label: {
-                        Text(item.timestamp!, formatter: itemFormatter)
-                    }
-                }
-                .onDelete(perform: deleteItems)
-            }
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    EditButton()
-                }
-                ToolbarItem {
-                    Button(action: addItem) {
-                        Label("Add Item", systemImage: "plus")
-                    }
+        VStack {
+            Map(coordinateRegion: $region,
+                interactionModes: [.all],
+                annotationItems: places) { place in
+                MapAnnotation(coordinate: place.coordinate, anchorPoint: CGPoint(x: 0.5, y: 0.5)) {
+                    MapPinView(place: place) 
                 }
             }
-            Text("Select an item")
+            .frame(height: 400)
+
+            Button("Start updates") {
+                locationManager.startLocationUpdates()
+            }
+            .padding()
+
+            Button("Add pin") {
+                addPin()
+            }
+        }
+        .onReceive(locationManager.$location) { location in
+            guard let location = location else { return }
+            region.center = location
         }
     }
 
-    private func addItem() {
-        withAnimation {
-            let newItem = Item(context: viewContext)
-            newItem.timestamp = Date()
-
-            do {
-                try viewContext.save()
-            } catch {
-                // Replace this implementation with code to handle the error appropriately.
-                // fatalError() causes the application to generate a crash log and terminate. You should not use this function in a shipping application, although it may be useful during development.
-                let nsError = error as NSError
-                fatalError("Unresolved error \(nsError), \(nsError.userInfo)")
-            }
-        }
-    }
-
-    private func deleteItems(offsets: IndexSet) {
-        withAnimation {
-            offsets.map { items[$0] }.forEach(viewContext.delete)
-
-            do {
-                try viewContext.save()
-            } catch {
-                // Replace this implementation with code to handle the error appropriately.
-                // fatalError() causes the application to generate a crash log and terminate. You should not use this function in a shipping application, although it may be useful during development.
-                let nsError = error as NSError
-                fatalError("Unresolved error \(nsError), \(nsError.userInfo)")
-            }
+    func addPin() {
+        if let location = locationManager.location {
+            let newPlace = Place(name: "Here", latitude: location.latitude, longitude: location.longitude)
+            places.append(newPlace)
         }
     }
 }
 
-private let itemFormatter: DateFormatter = {
-    let formatter = DateFormatter()
-    formatter.dateStyle = .short
-    formatter.timeStyle = .medium
-    return formatter
-}()
+struct MapPinView: View {
+    var place: Place
 
-#Preview {
-    ContentView().environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
+    var body: some View {
+        VStack {
+            Image(systemName: "house.fill")
+                .resizable()
+                .frame(width: 30, height: 30)
+            Text(place.name)
+                .font(.caption)
+                .foregroundColor(.black)
+        }
+    }
 }
